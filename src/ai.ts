@@ -4,11 +4,20 @@ import { state, canDoubleDown as canDoubleDownComputed, canSplit as canSplitComp
 
 export type Provider = 'ls'
 
-const rawBaseURL = (import.meta as any).env?.VITE_LS_BASE_URL || ''
-// If VITE_LS_BASE_URL is absolute (http...), use it; otherwise use current origin so '/v1' requests go via Vite proxy
-const baseURL = /^https?:/i.test(rawBaseURL)
-  ? String(rawBaseURL).replace(/\/$/, '')
-  : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173')
+const rawBaseURL = (import.meta as any).env?.VITE_LS_BASE_URL as string | undefined
+// Resolve to an absolute base URL and strip trailing /v1 so resources can append it
+let baseURL: string
+if (rawBaseURL) {
+  if (/^https?:/i.test(rawBaseURL)) {
+    baseURL = rawBaseURL.replace(/\/$/, '').replace(/\/v1\/?$/, '')
+  } else if (rawBaseURL.startsWith('/')) {
+    baseURL = (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173')
+  } else {
+    baseURL = `http://${rawBaseURL}`.replace(/\/$/, '').replace(/\/v1\/?$/, '')
+  }
+} else {
+  baseURL = 'http://localhost:8321'
+}
 const apiKey = (import.meta as any).env?.VITE_LS_API_KEY || ''
 const modelId = (import.meta as any).env?.VITE_LS_MODEL_ID || 'mistral-small-24b-w8a8'
 
@@ -47,17 +56,27 @@ function buildPrompt(): string {
   const canSplit = canSplitComputed.value
   const bank = state.activePlayer?.bank ?? 0
   const bet = state.activeHand?.bet ?? 0
-  return `You are assisting a player in Blackjack. Respond with a single word: hit, stand, double, or split. Only choose double/split if allowed.
+  return `Context:
 Player hand: ${activeCards} (total ${activeTotal})
 Dealer upcard: ${dealerUp}
-Allowed actions: hit, stand${canDouble ? ', double' : ''}${canSplit ? ', split' : ''}
+Allowed actions now: hit, stand${canDouble ? ', double' : ''}${canSplit ? ', split' : ''}
 Bet: ${bet}, Bank: ${bank}
-Return format: JSON {"action": "hit|stand|double|split", "reason": "short"}`
+
+Task: Give friendly, confident blackjack advice as a seasoned coach. In 1-2 short sentences, explain what to do next and why (basic strategy first; consider double/split only if allowed). Keep it human and encouraging. Each reply should invoke a different reasoning.
+
+Important: After your sentence, on a new line output exactly one JSON object with the final decision and a long reason, like:
+{"action":"stand","reason":"Try to avoid busting, you've got this!"}
+
+Valid actions: hit | stand | double | split`
 }
 
 export async function getAIRecommendation(): Promise<AIRecommendation> {
   const messages: Array<{ role: 'system' | 'user'; content: string }> = [
-    { role: 'system', content: 'You are a concise blackjack strategy assistant.' },
+    {
+      role: 'system',
+      content:
+        'You are a seasoned blackjack coach. Be friendly, confident, and concise. Speak in one or two sentences explaining the advice, then on a new line output a single JSON object with {"action":"hit|stand|double|split","reason":"short"}. Avoid extra formatting.',
+    },
     { role: 'user', content: buildPrompt() },
   ]
 
@@ -94,12 +113,34 @@ export async function getAIRecommendation(): Promise<AIRecommendation> {
 
   let action: AIRecommendation['action'] = 'unknown'
   let rationale: string | undefined
-  try {
-    const parsed = JSON.parse(textBuffer || '{}')
-    const a = String(parsed.action || '').toLowerCase()
-    if (a === 'hit' || a === 'stand' || a === 'double' || a === 'split') action = a
-    rationale = parsed.reason
-  } catch {
+  // Try to extract a JSON decision from the free-form text
+  const parseDecision = (text: string) => {
+    const cleaned = (text || '')
+      .replace(/```json/g, '```')
+      .replace(/```/g, '')
+      .trim()
+    const jsonMatches = cleaned.match(/\{[\s\S]*?\}/g)
+    if (!jsonMatches || jsonMatches.length === 0) return null
+    // Prefer the last JSON-looking block
+    for (let i = jsonMatches.length - 1; i >= 0; i--) {
+      try {
+        const obj = JSON.parse(jsonMatches[i]) as { action?: string; reason?: string }
+        const a = String(obj.action || '').toLowerCase()
+        if (a === 'hit' || a === 'stand' || a === 'double' || a === 'split') {
+          return { action: a as AIRecommendation['action'], reason: obj.reason }
+        }
+      } catch {
+        // continue trying previous matches
+      }
+    }
+    return null
+  }
+
+  const decision = parseDecision(textBuffer)
+  if (decision) {
+    action = decision.action
+    rationale = decision.reason
+  } else {
     const m = (textBuffer || '').toLowerCase()
     if (m.includes('double') && canDoubleDownComputed.value) action = 'double'
     else if (m.includes('split') && canSplitComputed.value) action = 'split'

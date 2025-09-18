@@ -86,12 +86,20 @@ button:first-of-type {
 }
 .ai-toast {
   position: fixed;
-  bottom: 1rem;
+  top: 50%;
   left: 50%;
-  transform: translateX(-50%);
-  background: rgba(0,0,0,0.8);
+  transform: translate(-50%, -50%);
+  background: rgba(0,0,0,0.85);
   color: var(--color-white);
-  padding: 0.6rem 1rem;
-  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  z-index: 1000;
+  text-align: center;
+  font-size: clamp(2rem, 4.5vw, 3rem);
+  font-variation-settings: 'wght' 700;
+  line-height: 1.2;
+  max-width: min(90vw, 28rem);
+  pointer-events: none;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
 }
 </style>
