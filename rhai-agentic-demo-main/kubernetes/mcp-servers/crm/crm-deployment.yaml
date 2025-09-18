@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crm-mcp-server
+  labels:
+    app: crm-mcp-server
+    app.kubernetes.io/component: crm-mcp-server
+    app.kubernetes.io/instance: crm-mcp-server
+    app.kubernetes.io/name: crm-mcp-server
+    app.kubernetes.io/part-of: mcp-servers
+  annotations:
+    app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"crm"}]'
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crm-mcp-server
+  template:
+    metadata:
+      labels:
+        app: crm-mcp-server
+    spec:
+      containers:
+        - name: crm-mcp-server
+          image: quay.io/rh-aiservices-bu/mcp-servers:crm
+          imagePullPolicy: Always
+          command: ["/bin/sh", "-c"]
+          args:
+            - npx -y supergateway --stdio "node app/index.js" --port 8080
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+          env:
+            - name: NPM_CONFIG_CACHE
+              value: /tmp/.npm
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: crm-mcp-server-secrets
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: crm-mcp-server-secrets
+                  key: DB_PASSWORD
+            - name: DB_HOST
+              valueFrom:
+                secretKeyRef:
+                  name: crm-mcp-server-secrets
+                  key: DB_HOST
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: crm-mcp-server-secrets
+                  key: DB_NAME
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+            requests:
+              cpu: "200m"
+              memory: "256Mi"

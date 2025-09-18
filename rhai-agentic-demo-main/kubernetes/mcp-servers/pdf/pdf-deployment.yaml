@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pdf-mcp-server
+  labels:
+    app: pdf-mcp-server
+    app.kubernetes.io/part-of: mcp-servers
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pdf-mcp-server
+  template:
+    metadata:
+      labels:
+        app: pdf-mcp-server
+    spec:
+      containers:
+        - name: pdf-mcp-server
+          image: quay.io/rh-aiservices-bu/mcp-servers:pdf
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8010
+              protocol: TCP
+              name: mcp-server
+          env:
+            - name: NPM_CONFIG_CACHE
+              value: /tmp/.npm
+            - name: XDG_CONFIG_HOME
+              value: "/tmp/.chromium"
+            - name: XDG_CACHE_HOME
+              value: "/tmp/.chromium"
+            - name: M2P_OUTPUT_DIR
+              value: "/mcp_output"
+            - name: PDF_ROUTE_URL
+              value: "https://pdf-files-NAMESPACE.apps.CLUSTER-DOMAIN.com"
+          resources:
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+            requests:
+              cpu: "200m"
+              memory: "256Mi"
+          volumeMounts:
+            - name: tmp-chrome-data
+              mountPath: /tmp/chrome-user-data
+            - name: tmp-crashpad
+              mountPath: /tmp/crashpad
+            - name: tmp-chromium
+              mountPath: /tmp/.chromium
+            - name: mcp-output
+              mountPath: /mcp_output
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+              name: nginx
+          command: ["/bin/sh", "-c"]
+          args: 
+            - |
+              mkdir -p /tmp/client_temp /tmp/proxy_temp_path /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp
+              nginx -g "daemon off;"
+          volumeMounts:
+            - name: mcp-output
+              mountPath: /usr/share/nginx/html/files
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+            - name: nginx-temp
+              mountPath: /tmp
+          resources:
+            limits:
+              cpu: "100m"
+              memory: "64Mi"
+            requests:
+              cpu: "50m"
+              memory: "32Mi"
+      volumes:
+        - name: tmp-chrome-data
+          emptyDir: {}
+        - name: tmp-crashpad
+          emptyDir: {}
+        - name: tmp-chromium
+          emptyDir: {}
+        - name: mcp-output
+          emptyDir:
+            sizeLimit: 1Gi
+        - name: nginx-config
+          configMap:
+            name: nginx-pdf-config
+        - name: nginx-temp
+          emptyDir: {}

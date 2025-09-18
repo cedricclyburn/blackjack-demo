@@ -1,0 +1,17 @@
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: pdf-files
+  labels:
+    app: pdf-mcp-server
+spec:
+  to:
+    kind: Service
+    name: pdf-mcp-server
+    weight: 100
+  port:
+    targetPort: nginx
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: None
+  wildcardPolicy: None

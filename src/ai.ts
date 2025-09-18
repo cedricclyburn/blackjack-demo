@@ -24,8 +24,8 @@ const modelId = (import.meta as any).env?.VITE_LS_MODEL_ID || 'mistral-small-24b
 export const llamaClient = new LlamaStackClient({
   baseURL,
   apiKey,
-  maxRetries: 1,
-  timeout: 60_000,
+  maxRetries: 0, // No retries for faster response
+  timeout: 10_000, // Reduced timeout to 10 seconds
 })
 
 export interface AIRecommendation {
@@ -62,12 +62,10 @@ Dealer upcard: ${dealerUp}
 Allowed actions now: hit, stand${canDouble ? ', double' : ''}${canSplit ? ', split' : ''}
 Bet: ${bet}, Bank: ${bank}
 
-Task: Give friendly, confident blackjack advice as a seasoned coach. In 1-2 short sentences, explain what to do next and why (basic strategy first; consider double/split only if allowed). Keep it human and encouraging. Each reply should invoke a different reasoning.
+Task: Recommend the best blackjack action and output ONLY a JSON object:
+{"action":"hit|stand|double|split","reason":"Brief explanation"}
 
-Important: After your sentence, on a new line output exactly one JSON object with the final decision and a long reason, like:
-{"action":"stand","reason":"Try to avoid busting, you've got this!"}
-
-Valid actions: hit | stand | double | split`
+Choose based on basic strategy. Be encouraging!`
 }
 
 export async function getAIRecommendation(): Promise<AIRecommendation> {
@@ -75,7 +73,7 @@ export async function getAIRecommendation(): Promise<AIRecommendation> {
     {
       role: 'system',
       content:
-        'You are a seasoned blackjack coach. Be friendly, confident, and concise. Speak in one or two sentences explaining the advice, then on a new line output a single JSON object with {"action":"hit|stand|double|split","reason":"short"}. Avoid extra formatting.',
+        'You are a blackjack expert. Respond with ONLY a JSON object: {"action":"hit|stand|double|split","reason":"brief explanation"}. No other text.',
     },
     { role: 'user', content: buildPrompt() },
   ]
@@ -84,31 +82,26 @@ export async function getAIRecommendation(): Promise<AIRecommendation> {
   let ttftMs: number | undefined
   let textBuffer = ''
 
+  // Use non-streaming for faster, more reliable responses
   try {
-    const stream = await llamaClient.inference.chatCompletion({
-      model_id: modelId,
-      messages,
-      stream: true,
-      sampling_params: { max_tokens: 500 } as any,
-    } as any)
-
-    for await (const chunk of stream as any) {
-      const ev = chunk?.event
-      if (!ev) continue
-      if (ev.event_type === 'progress' && (ev.delta as any)?.type === 'text') {
-        if (ttftMs === undefined) ttftMs = performance.now() - started
-        const t = (ev.delta as any)?.text || ''
-        if (t) textBuffer += t
-      }
-    }
-  } catch (err) {
     const resp = await llamaClient.inference.chatCompletion({
       model_id: modelId,
       messages,
-      sampling_params: { max_tokens: 500 } as any,
+      stream: false,
+      sampling_params: { 
+        max_tokens: 200,  // Reduced for faster response
+        temperature: 0.7,
+        top_p: 0.9
+      } as any,
     } as any)
+    
     const content = (resp as any).completion_message?.content || (resp as any).message?.content || ''
     textBuffer = typeof content === 'string' ? content : content?.[0]?.text || ''
+    ttftMs = performance.now() - started
+  } catch (err) {
+    console.error('AI API error:', err)
+    // Fallback to a simple response if API fails
+    textBuffer = '{"action":"hit","reason":"Unable to connect to AI. Basic strategy suggests hitting on 16 vs dealer 10."}'
   }
 
   const latencyMs = performance.now() - started

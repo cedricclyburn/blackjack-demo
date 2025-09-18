@@ -19,7 +19,7 @@ async function askAI() {
   } catch (e) {
     toast.value = { message: 'AI unavailable. Check Llama Stack.', visible: true }
   } finally {
-    setTimeout(() => (toast.value.visible = false), 2500)
+    setTimeout(() => (toast.value.visible = false), 6000) // Show advice for 6 seconds
   }
 }
 </script>
