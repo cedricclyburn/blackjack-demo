@@ -2,12 +2,15 @@ import 'llama-stack-client/shims/web'
 import LlamaStackClient from 'llama-stack-client'
 import { state, canDoubleDown as canDoubleDownComputed, canSplit as canSplitComputed } from '@/store'
 
-type Provider = 'ollama' | 'vllm'
+export type Provider = 'ls'
 
-const baseURL = (import.meta as any).env?.VITE_LS_BASE_URL || 'http://localhost:8080/v1'
+const rawBaseURL = (import.meta as any).env?.VITE_LS_BASE_URL || ''
+// If VITE_LS_BASE_URL is absolute (http...), use it; otherwise use current origin so '/v1' requests go via Vite proxy
+const baseURL = /^https?:/i.test(rawBaseURL)
+  ? String(rawBaseURL).replace(/\/$/, '')
+  : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173')
 const apiKey = (import.meta as any).env?.VITE_LS_API_KEY || ''
-const ollamaModel = (import.meta as any).env?.VITE_LS_OLLAMA_MODEL_ID || 'llama3.2'
-const vllmModel = (import.meta as any).env?.VITE_LS_VLLM_MODEL_ID || 'mistral-small-24b-w8a8'
+const modelId = (import.meta as any).env?.VITE_LS_MODEL_ID || 'mistral-small-24b-w8a8'
 
 export const llamaClient = new LlamaStackClient({
   baseURL,
@@ -52,42 +55,59 @@ Bet: ${bet}, Bank: ${bank}
 Return format: JSON {"action": "hit|stand|double|split", "reason": "short"}`
 }
 
-function chooseModel(provider: Provider): string {
-  return provider === 'ollama' ? ollamaModel : vllmModel
-}
-
-export async function getAIRecommendation(provider: Provider): Promise<AIRecommendation> {
-  const modelId = chooseModel(provider)
-  const messages = [
+export async function getAIRecommendation(): Promise<AIRecommendation> {
+  const messages: Array<{ role: 'system' | 'user'; content: string }> = [
     { role: 'system', content: 'You are a concise blackjack strategy assistant.' },
     { role: 'user', content: buildPrompt() },
-  ] as const
+  ]
 
   const started = performance.now()
-  const response = await llamaClient.inference.chatCompletion({
-    model_id: modelId,
-    messages,
-  })
+  let ttftMs: number | undefined
+  let textBuffer = ''
+
+  try {
+    const stream = await llamaClient.inference.chatCompletion({
+      model_id: modelId,
+      messages,
+      stream: true,
+    })
+
+    for await (const chunk of stream as any) {
+      const ev = chunk?.event
+      if (!ev) continue
+      if (ev.event_type === 'progress' && (ev.delta as any)?.type === 'text') {
+        if (ttftMs === undefined) ttftMs = performance.now() - started
+        const t = (ev.delta as any)?.text || ''
+        if (t) textBuffer += t
+      }
+    }
+  } catch (err) {
+    const resp = await llamaClient.inference.chatCompletion({
+      model_id: modelId,
+      messages,
+    })
+    const content = (resp as any).completion_message?.content || (resp as any).message?.content || ''
+    textBuffer = typeof content === 'string' ? content : content?.[0]?.text || ''
+  }
+
   const latencyMs = performance.now() - started
 
-  const content = (response as any).completion_message?.content || (response as any).message?.content || ''
   let action: AIRecommendation['action'] = 'unknown'
   let rationale: string | undefined
   try {
-    const parsed = JSON.parse(typeof content === 'string' ? content : content?.[0]?.text || '{}')
+    const parsed = JSON.parse(textBuffer || '{}')
     const a = String(parsed.action || '').toLowerCase()
     if (a === 'hit' || a === 'stand' || a === 'double' || a === 'split') action = a
     rationale = parsed.reason
   } catch {
-    const text: string = typeof content === 'string' ? content : content?.[0]?.text || ''
-    const m = text.toLowerCase()
+    const m = (textBuffer || '').toLowerCase()
     if (m.includes('double') && canDoubleDownComputed.value) action = 'double'
     else if (m.includes('split') && canSplitComputed.value) action = 'split'
     else if (m.includes('stand')) action = 'stand'
     else if (m.includes('hit')) action = 'hit'
   }
 
-  return { provider, modelId, action, rationale, latencyMs }
+  return { provider: 'ls', modelId, action, rationale, latencyMs, ttftMs }
 }
 
 export async function notifyBalanceViaAgent(note: string): Promise<void> {

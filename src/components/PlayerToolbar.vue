@@ -7,13 +7,11 @@ import { ref } from 'vue'
 
 const toast = ref<{ message: string; visible: boolean }>({ message: '', visible: false })
 
-const defaultProvider = ((import.meta as any).env?.VITE_AI_PROVIDER as 'ollama' | 'vllm') || 'ollama'
-
-async function askAI(provider: 'ollama' | 'vllm' = defaultProvider) {
+async function askAI() {
   if (state.isDealing || !state.activeHand) return
   try {
-    const rec = await getAIRecommendation(provider)
-    recordMetric({ timestamp: Date.now(), provider: rec.provider, latencyMs: Math.round(rec.latencyMs), ttftMs: rec.ttftMs })
+    const rec = await getAIRecommendation()
+    recordMetric({ timestamp: Date.now(), provider: rec.provider, modelId: rec.modelId, latencyMs: Math.round(rec.latencyMs), ttftMs: rec.ttftMs })
     toast.value = {
       message: `AI suggests: ${rec.action.toUpperCase()}${rec.rationale ? ' — ' + rec.rationale : ''}`,
       visible: true,

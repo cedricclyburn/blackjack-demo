@@ -6,7 +6,7 @@ import vueDevTools from 'vite-plugin-vue-devtools'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/vlackjack/',
+  base: '/',
   plugins: [
     vue(),
     vueDevTools(),
@@ -14,6 +14,14 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
+    },
+  },
+  server: {
+    proxy: {
+      '/v1': {
+        target: 'http://localhost:8321',
+        changeOrigin: true,
+      },
     },
   },
 })

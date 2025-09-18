@@ -21,6 +21,14 @@ function toggleSound() {
         />
       </svg>
     </a>
+    <router-link class="admin-link" to="/admin" aria-label="Admin metrics">
+      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 3v18h18" />
+        <rect x="7" y="12" width="3" height="6" />
+        <rect x="12" y="9" width="3" height="9" />
+        <rect x="17" y="5" width="3" height="13" />
+      </svg>
+    </router-link>
     <h1>Blackjack (With AI) — Red Hat Developer Advocates</h1>
     <button @click="toggleSound" aria-label="Toggle sound">
       <svg
@@ -100,6 +108,7 @@ button {
   opacity: 0.75;
   color: var(--color-off-white);
 }
+.admin-link { display: inline-flex; align-items: center; justify-content: center; }
 @media (hover: hover) {
   a:hover,
   button:hover {
