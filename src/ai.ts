@@ -89,8 +89,8 @@ export async function getAIRecommendation(): Promise<AIRecommendation> {
       model_id: modelId,
       messages,
       stream: true,
-      max_tokens: 500,
-    })
+      sampling_params: { max_tokens: 500 } as any,
+    } as any)
 
     for await (const chunk of stream as any) {
       const ev = chunk?.event
@@ -105,8 +105,8 @@ export async function getAIRecommendation(): Promise<AIRecommendation> {
     const resp = await llamaClient.inference.chatCompletion({
       model_id: modelId,
       messages,
-      max_tokens: 500,
-    })
+      sampling_params: { max_tokens: 500 } as any,
+    } as any)
     const content = (resp as any).completion_message?.content || (resp as any).message?.content || ''
     textBuffer = typeof content === 'string' ? content : content?.[0]?.text || ''
   }
