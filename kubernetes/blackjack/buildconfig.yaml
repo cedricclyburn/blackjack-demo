@@ -1,0 +1,29 @@
+apiVersion: build.openshift.io/v1
+kind: BuildConfig
+metadata:
+  name: blackjack-app
+  labels:
+    app: blackjack
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/instance: blackjack
+    app.kubernetes.io/name: blackjack
+spec:
+  source:
+    type: Git
+    git:
+      uri: https://github.com/cedricclyburn/blackjack-demo.git
+      ref: main
+  strategy:
+    type: Docker
+    dockerStrategy:
+      dockerfilePath: Containerfile
+      buildArgs:
+      - name: VITE_LS_BASE_URL
+        value: "/v1"
+      - name: VITE_LS_MODEL_ID
+        value: "mistral-small-24b-w8a8"
+  output:
+    to:
+      kind: ImageStreamTag
+      name: blackjack:latest
+  runPolicy: Serial

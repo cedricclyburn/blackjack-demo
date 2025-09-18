@@ -1,0 +1,12 @@
+apiVersion: image.openshift.io/v1
+kind: ImageStream
+metadata:
+  name: blackjack
+  labels:
+    app: blackjack
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/instance: blackjack
+    app.kubernetes.io/name: blackjack
+spec:
+  lookupPolicy:
+    local: true

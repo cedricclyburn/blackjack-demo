@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blackjack-app
+  labels:
+    app: blackjack
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/instance: blackjack
+    app.kubernetes.io/name: blackjack
+    app.kubernetes.io/part-of: blackjack-demo
+  annotations:
+    app.openshift.io/connects-to: '[{"apiVersion":"apps/v1","kind":"Deployment","name":"llamastack-deployment"}]'
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blackjack
+  template:
+    metadata:
+      labels:
+        app: blackjack
+        deployment: blackjack
+    spec:
+      containers:
+      - name: blackjack
+        image: image-registry.openshift-image-registry.svc:5000/blackjack-ai-demo/blackjack:latest
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        env:
+        - name: VITE_LS_BASE_URL
+          value: "/v1"
+        - name: VITE_LS_MODEL_ID
+          value: "mistral-small-24b-w8a8"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      restartPolicy: Always
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
